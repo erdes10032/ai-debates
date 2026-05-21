@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% load i18n %}
+
+{% block title %}
+    {{ profile.username }}
+{% endblock %}
+
+{% block content %}
+
+<div class="columns is-centered">
+
+    <div class="column is-8">
+
+        <div class="box">
+
+            <h1 class="title">
+
+                {{ profile.username }}
+
+            </h1>
+
+            {% if profile.avatar %}
+
+                <div class="mb-5">
+
+                    <img
+                        src="{{ profile.avatar.url }}"
+                        alt="avatar"
+                        style="
+                            max-width: 300px;
+                            max-height: 300px;
+                            border-radius: 12px;
+                            border: 1px solid #dbdbdb;
+                        "
+                    >
+
+                </div>
+
+            {% endif %}
+
+            <div class="content">
+
+                <p>
+
+                    <strong>
+                        {% trans "Email" %}:
+                    </strong>
+
+                    {{ profile.email }}
+
+                </p>
+
+                <p>
+
+                    <strong>
+                        {% trans "Gender" %}:
+                    </strong>
+
+                    {{ profile.get_gender_display }}
+
+                </p>
+
+                <p>
+
+                    <strong>
+                        {% trans "Bio" %}:
+                    </strong>
+
+                </p>
+
+                <div class="box">
+
+                    {{ profile.bio|default:_("No bio yet.") }}
+
+                </div>
+
+            </div>
+
+            <a
+                href="{% url 'users:profile_edit' %}"
+                class="button is-primary"
+            >
+
+                {% trans "Edit profile" %}
+
+            </a>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="columns is-centered">
+
+    <div class="column is-6">
+
+        <div class="box">
+
+            <h1 class="title">
+                {% trans "Edit profile" %}
+            </h1>
+
+            <form
+                method="post"
+                enctype="multipart/form-data"
+            >
+
+                {% csrf_token %}
+
+                {% for field in form %}
+
+                    <div class="field">
+
+                        <label class="label">
+                            {{ field.label }}
+                        </label>
+
+                        <div class="control">
+                            {{ field }}
+                        </div>
+
+                        {% if field.errors %}
+
+                            <p class="help is-danger">
+                                {{ field.errors }}
+                            </p>
+
+                        {% endif %}
+
+                    </div>
+
+                {% endfor %}
+
+                <button class="button is-primary">
+                    {% trans "Save" %}
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

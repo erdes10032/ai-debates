@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="columns is-centered">
+    <div class="column is-4">
+
+        <h1 class="title">
+            {% trans "Logout" %}
+        </h1>
+
+        <form method="post">
+
+            {% csrf_token %}
+
+            <button class="button is-danger">
+                {% trans "Confirm logout" %}
+            </button>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

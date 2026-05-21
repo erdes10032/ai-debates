@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="columns is-centered">
+
+    <div class="column is-5">
+
+        <div class="box has-text-centered">
+
+            <h1 class="title">
+
+                {% trans "Verify Your Email Address" %}
+
+            </h1>
+
+            <div class="notification is-info">
+
+                {% trans "We have sent you an email with a confirmation link." %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
