@@ -4,6 +4,9 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from users.validators import validate_avatar
+
+
 User = get_user_model()
 
 
@@ -74,6 +77,14 @@ class CustomSignupForm(SignupForm):
 
         return email
 
+    def clean_avatar(self):
+
+        avatar = self.cleaned_data.get('avatar')
+
+        validate_avatar(avatar)
+
+        return avatar
+
     def save(self, request):
         user = super().save(request)
 
@@ -131,3 +142,11 @@ class UserUpdateForm(forms.ModelForm):
                 }
             ),
         }
+
+    def clean_avatar(self):
+
+        avatar = self.cleaned_data.get('avatar')
+
+        validate_avatar(avatar)
+
+        return avatar
