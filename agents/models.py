@@ -64,6 +64,15 @@ class DebateRole(models.Model):
         default=True,
     )
 
+    allows_concession = models.BooleanField(
+        default=True,
+        verbose_name=_('Allows concession'),
+        help_text=_(
+            'If enabled, this role may concede during a debate '
+            'when concessions are allowed'
+        ),
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
