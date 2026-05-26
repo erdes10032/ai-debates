@@ -30,9 +30,13 @@ class DebateRoleAdmin(admin.ModelAdmin):
     list_display = (
         'name',
         'is_active',
+        'allows_concession',
         'updated_at',
     )
 
-    list_filter = ('is_active',)
+    list_filter = (
+        'is_active',
+        'allows_concession',
+    )
 
     search_fields = ('name',)
