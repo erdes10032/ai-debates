@@ -1,0 +1,261 @@
+{% extends 'base.html' %}
+{% load i18n static %}
+
+{% block content %}
+
+<h1 class="title">
+    {% trans "Create Debate" %}
+</h1>
+
+<div class="box">
+
+    <form
+        method="post"
+        id="debate-create-form"
+    >
+
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="notification is-danger">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div class="field">
+
+            <label class="label">
+                {{ form.topic.label }}
+            </label>
+
+            <div class="control">
+                {{ form.topic }}
+            </div>
+
+        </div>
+
+        <div class="field">
+
+            <label class="label">
+                {{ form.rounds_count.label }}
+            </label>
+
+            <div class="control">
+                {{ form.rounds_count }}
+            </div>
+
+        </div>
+
+        <div class="field">
+
+            <div class="control">
+                <label class="checkbox">
+                    {{ form.allow_concessions }}
+                    {{ form.allow_concessions.label }}
+                </label>
+            </div>
+
+            <p class="help">
+                {% trans "From round 2, participants may concede if their position is no longer defensible. The debate ends early when an entire side concedes." %}
+            </p>
+
+        </div>
+
+        <h2 class="title is-5 mt-5">
+            {% trans "Participants" %}
+        </h2>
+
+        <p class="mb-4 has-text-grey">
+            {% blocktrans with min=min_participants max=max_participants %}
+            Add from {{ min }} to {{ max }} participants. Choose a model and role for each. The same model or role can be used more than once.
+            {% endblocktrans %}
+        </p>
+
+        {{ participant_formset.management_form }}
+
+        {% if participant_formset.non_form_errors %}
+            <div class="notification is-danger">
+                {{ participant_formset.non_form_errors }}
+            </div>
+        {% endif %}
+
+        <div
+            id="participants-formset"
+            data-prefix="{{ participant_formset.prefix }}"
+            data-min="{{ min_participants }}"
+            data-max="{{ max_participants }}"
+        >
+
+            {% for participant_form in participant_formset %}
+
+                <div class="box participant-row mb-4">
+
+                    <div class="level is-mobile mb-3">
+
+                        <div class="level-left">
+
+                            <p class="has-text-weight-semibold participant-title">
+                                {% trans "Participant" %}
+                                <span class="participant-number">
+                                    {{ forloop.counter }}
+                                </span>
+                            </p>
+
+                        </div>
+
+                        <div class="level-right">
+
+                            <button
+                                type="button"
+                                class="button is-small is-danger is-light remove-participant"
+                                {% if forloop.counter <= min_participants %}
+                                    disabled
+                                {% endif %}
+                            >
+                                {% trans "Remove" %}
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <div class="columns">
+
+                        <div class="column">
+
+                            <label class="label">
+                                {{ participant_form.llm_model.label }}
+                            </label>
+
+                            <div class="control">
+                                {{ participant_form.llm_model }}
+                            </div>
+
+                            {% if participant_form.llm_model.errors %}
+                                <p class="help is-danger">
+                                    {{ participant_form.llm_model.errors }}
+                                </p>
+                            {% endif %}
+
+                        </div>
+
+                        <div class="column">
+
+                            <label class="label">
+                                {{ participant_form.debate_role.label }}
+                            </label>
+
+                            <div class="control">
+                                {{ participant_form.debate_role }}
+                            </div>
+
+                            {% if participant_form.debate_role.errors %}
+                                <p class="help is-danger">
+                                    {{ participant_form.debate_role.errors }}
+                                </p>
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+        <div class="buttons mb-5">
+
+            <button
+                type="button"
+                class="button is-link is-light"
+                id="add-participant"
+            >
+                {% trans "Add participant" %}
+            </button>
+
+            <span
+                class="is-size-7 has-text-grey"
+                id="participant-count-label"
+            ></span>
+
+        </div>
+
+        <button
+            type="submit"
+            class="button is-primary"
+        >
+            {% trans "Start Debate" %}
+        </button>
+
+    </form>
+
+</div>
+
+<template id="empty-participant-template">
+
+    <div class="box participant-row mb-4">
+
+        <div class="level is-mobile mb-3">
+
+            <div class="level-left">
+
+                <p class="has-text-weight-semibold participant-title">
+                    {% trans "Participant" %}
+                    <span class="participant-number">__num__</span>
+                </p>
+
+            </div>
+
+            <div class="level-right">
+
+                <button
+                    type="button"
+                    class="button is-small is-danger is-light remove-participant"
+                >
+                    {% trans "Remove" %}
+                </button>
+
+            </div>
+
+        </div>
+
+        <div class="columns">
+
+            <div class="column">
+
+                <label class="label">
+                    {{ participant_formset.empty_form.llm_model.label }}
+                </label>
+
+                <div class="control">
+                    {{ participant_formset.empty_form.llm_model }}
+                </div>
+
+            </div>
+
+            <div class="column">
+
+                <label class="label">
+                    {{ participant_formset.empty_form.debate_role.label }}
+                </label>
+
+                <div class="control">
+                    {{ participant_formset.empty_form.debate_role }}
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</template>
+
+<script
+    src="{% static 'js/debate_participant_formset.js' %}"
+    defer
+></script>
+
+{% endblock %}
