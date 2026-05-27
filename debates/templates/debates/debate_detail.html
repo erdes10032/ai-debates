@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+{% load i18n debate_filters static %}
+
+{% block content %}
+
+<link
+    rel="stylesheet"
+    href="{% static 'css/debate_content.css' %}"
+>
+
+<h1 class="title">
+    {{ debate.topic }}
+</h1>
+
+<div class="mb-5">
+
+    <span
+        id="debate-status"
+        class="tag is-warning is-medium"
+    >
+        {{ debate.get_status_display }}
+    </span>
+
+    <span class="tag is-light ml-2">
+        {% blocktrans count count=participants_count %}
+        {{ count }} participant
+        {% plural %}
+        {{ count }} participants
+        {% endblocktrans %}
+    </span>
+
+    {% if allow_concessions %}
+        <span class="tag is-success is-light ml-2">
+            {% trans "Concessions enabled" %}
+        </span>
+    {% endif %}
+
+</div>
+
+{% if debate.status == 'completed' %}
+    <div class="mb-5">
+        <a
+            href="{% url 'debates:history-pdf' debate.id %}"
+            class="button is-link is-light"
+        >
+            {% trans "Download history as PDF" %}
+        </a>
+    </div>
+{% endif %}
+
+<div id="messages-container">
+
+    {% for message in debate_messages %}
+
+        {% ifchanged message.round.number %}
+            <div
+                class="notification is-light round-divider mb-4"
+                data-round="{{ message.round.number }}"
+            >
+                <strong>
+                    {% trans "Round" %} {{ message.round.number }}
+                </strong>
+            </div>
+        {% endifchanged %}
+
+        <div
+            class="box mb-4 debate-message"
+            data-message-id="{{ message.id }}"
+            data-round="{{ message.round.number }}"
+        >
+
+            <div class="mb-3">
+
+                <strong>
+                    {{ message.speaker_label }}
+                </strong>
+
+                <span class="tag is-info is-light ml-2">
+                    {{ message.role_name }}
+                </span>
+
+                <span class="tag is-dark ml-2">
+                    {% trans "Round" %} {{ message.round.number }}
+                </span>
+
+                {% if message.participant and message.participant.has_conceded and message.participant.conceded_at_round == message.round.number %}
+                    <span class="tag is-success ml-2 tag-conceded">
+                        {% trans "Conceded" %}
+                    </span>
+                {% endif %}
+
+            </div>
+
+            <div class="message-content markdown-content">
+                {{ message.content|render_markdown }}
+            </div>
+
+        </div>
+
+    {% endfor %}
+
+</div>
+
+<div
+    id="consensus-block"
+    class="box mt-6"
+    {% if not debate.consensus %}
+        style="display:none;"
+    {% endif %}
+>
+
+    <h2 class="title is-4">
+        {% trans "Consensus" %}
+    </h2>
+
+    <div
+        id="consensus-content"
+        class="markdown-content"
+    >
+        {{ debate.consensus|render_markdown }}
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+<script src="{% static 'js/debate_markdown.js' %}"></script>
+
+<script>
+
+const debateId = '{{ debate.id }}';
+
+const concededLabel = '{% trans "Conceded" %}';
+
+let lastRenderedRound = null;
+
+const initialRoundDividers = document.querySelectorAll(
+    '.round-divider[data-round]',
+);
+
+if (initialRoundDividers.length) {
+    lastRenderedRound = Number(
+        initialRoundDividers[
+            initialRoundDividers.length - 1
+        ].dataset.round,
+    );
+}
+
+const seenMessageIds = new Set(
+    Array.from(
+        document.querySelectorAll(
+            '.debate-message[data-message-id]'
+        )
+    ).map(
+        (element) => element.dataset.messageId
+    )
+);
+
+const protocol = (
+    window.location.protocol === 'https:'
+)
+    ? 'wss'
+    : 'ws';
+
+const socket = new WebSocket(
+    `${protocol}://${window.location.host}/ws/debates/${debateId}/`
+);
+
+socket.onmessage = function(event) {
+
+    const data = JSON.parse(
+        event.data
+    );
+
+    if (data.type === 'message') {
+
+        addMessage(data);
+    }
+
+    if (data.type === 'status') {
+
+        updateStatus(data);
+    }
+};
+
+function addMessage(data) {
+
+    const messageId = String(data.message_id);
+
+    if (seenMessageIds.has(messageId)) {
+        return;
+    }
+
+    seenMessageIds.add(messageId);
+
+    const container = document.getElementById(
+        'messages-container'
+    );
+
+    const roundNumber = Number(data.round);
+
+    if (lastRenderedRound !== roundNumber) {
+        lastRenderedRound = roundNumber;
+
+        const divider = document.createElement(
+            'div',
+        );
+
+        divider.className = (
+            'notification is-light round-divider mb-4'
+        );
+
+        divider.dataset.round = String(
+            roundNumber,
+        );
+
+        divider.innerHTML = (
+            `<strong>Round ${roundNumber}</strong>`
+        );
+
+        container.appendChild(divider);
+    }
+
+    const element = document.createElement(
+        'div'
+    );
+
+    element.className = 'box mb-4 debate-message';
+
+    element.dataset.messageId = messageId;
+
+    const concededTag = data.conceded
+        ? (
+            `<span class="tag is-success ml-2 tag-conceded">`
+            + `${escapeHtml(concededLabel)}</span>`
+        )
+        : '';
+
+    element.innerHTML = `
+        <div class="mb-3">
+
+            <strong>${escapeHtml(data.speaker)}</strong>
+
+            <span class="tag is-info is-light ml-2">
+                ${escapeHtml(data.role)}
+            </span>
+
+            <span class="tag is-dark ml-2">
+                Round ${data.round}
+            </span>
+
+            ${concededTag}
+
+        </div>
+
+        <div class="message-content markdown-content">
+            ${renderDebateMarkdown(data.content)}
+        </div>
+    `;
+
+    container.appendChild(element);
+
+    window.scrollTo(
+        0,
+        document.body.scrollHeight,
+    );
+}
+
+function updateStatus(data) {
+
+    document.getElementById(
+        'debate-status'
+    ).innerText = data.status;
+
+    if (data.consensus) {
+
+        const block = document.getElementById(
+            'consensus-block'
+        );
+
+        block.style.display = 'block';
+
+        document.getElementById(
+            'consensus-content'
+        ).innerHTML = renderDebateMarkdown(
+            data.consensus
+        );
+    }
+}
+
+function escapeHtml(text) {
+
+    const div = document.createElement(
+        'div'
+    );
+
+    div.innerText = text;
+
+    return div.innerHTML;
+}
+
+</script>
+
+{% endblock %}
