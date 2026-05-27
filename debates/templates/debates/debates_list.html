@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="level">
+
+    <div class="level-left">
+
+        <h1 class="title">
+            {% trans "Debates" %}
+        </h1>
+
+    </div>
+
+    <div class="level-right">
+
+        <a
+            href="{% url 'debates:create' %}"
+            class="button is-primary"
+        >
+            {% trans "Create Debate" %}
+        </a>
+
+    </div>
+
+</div>
+
+{% if debates %}
+
+    <div class="columns is-multiline">
+
+        {% for debate in debates %}
+
+            <div class="column is-6">
+
+                <div class="box">
+
+                    <h2 class="title is-5">
+
+                        <a href="{% url 'debates:detail' debate.id %}">
+                            {{ debate.topic }}
+                        </a>
+
+                    </h2>
+
+                    <div class="mb-3">
+
+                        {% if debate.status == 'pending' %}
+
+                            <span class="tag is-warning">
+                                Pending
+                            </span>
+
+                        {% elif debate.status == 'in_progress' %}
+
+                            <span class="tag is-info">
+                                In Progress
+                            </span>
+
+                        {% elif debate.status == 'completed' %}
+
+                            <span class="tag is-success">
+                                Completed
+                            </span>
+
+                        {% elif debate.status == 'failed' %}
+
+                            <span class="tag is-danger">
+                                Failed
+                            </span>
+
+                        {% endif %}
+
+                    </div>
+
+                    <p>
+                        <strong>
+                            {% trans "Rounds" %}:
+                        </strong>
+
+                        {{ debate.rounds_count }}
+                    </p>
+
+                    <p>
+                        <strong>
+                            {% trans "Created" %}:
+                        </strong>
+
+                        {{ debate.created_at }}
+                    </p>
+
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+{% else %}
+
+    <div class="box">
+
+        <p>
+            {% trans "No debates yet." %}
+        </p>
+
+    </div>
+
+{% endif %}
+
+{% endblock %}
