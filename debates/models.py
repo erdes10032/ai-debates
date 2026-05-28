@@ -19,20 +19,24 @@ class Debate(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='debates',
+        verbose_name=_('User'),
     )
 
     topic = models.CharField(
         max_length=500,
+        verbose_name=_('Topic'),
     )
 
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
+        verbose_name=_('Status'),
     )
 
     rounds_count = models.PositiveIntegerField(
         default=3,
+        verbose_name=_('Rounds count'),
     )
 
     allow_concessions = models.BooleanField(
@@ -46,19 +50,24 @@ class Debate(models.Model):
 
     consensus = models.TextField(
         blank=True,
+        verbose_name=_('Consensus'),
     )
 
     created_at = models.DateTimeField(
         auto_now_add=True,
+        verbose_name=_('Created at'),
     )
 
     updated_at = models.DateTimeField(
         auto_now=True,
+        verbose_name=_('Updated at'),
     )
 
     class Meta:
 
         ordering = ['-created_at']
+        verbose_name = _('Debate')
+        verbose_name_plural = _('Debates')
 
     def __str__(self):
 
@@ -77,42 +86,51 @@ class DebateParticipant(models.Model):
         Debate,
         on_delete=models.CASCADE,
         related_name='participants',
+        verbose_name=_('Debate'),
     )
 
     llm_model = models.ForeignKey(
         'agents.LLMModel',
         on_delete=models.PROTECT,
         related_name='debate_participants',
+        verbose_name=_('LLM model'),
     )
 
     debate_role = models.ForeignKey(
         'agents.DebateRole',
         on_delete=models.PROTECT,
         related_name='debate_participants',
+        verbose_name=_('Debate role'),
     )
 
     order = models.PositiveIntegerField(
         default=0,
+        verbose_name=_('Order'),
     )
 
     position = models.CharField(
         max_length=10,
         choices=Position.choices,
         blank=True,
+        verbose_name=_('Position'),
     )
 
     has_conceded = models.BooleanField(
         default=False,
+        verbose_name=_('Has conceded'),
     )
 
     conceded_at_round = models.PositiveIntegerField(
         null=True,
         blank=True,
+        verbose_name=_('Conceded at round'),
     )
 
     class Meta:
 
         ordering = ['order', 'id']
+        verbose_name = _('Debate participant')
+        verbose_name_plural = _('Debate participants')
 
     def __str__(self):
 
@@ -122,7 +140,7 @@ class DebateParticipant(models.Model):
     def speaker_label(self) -> str:
 
         return (
-            f'{self.debate_role.name} '
+            f'{self.debate_role.localized_name} '
             f'({self.llm_model.name}) '
             f'#{self.order + 1}'
         )
@@ -134,12 +152,16 @@ class DebateRound(models.Model):
         Debate,
         on_delete=models.CASCADE,
         related_name='rounds',
+        verbose_name=_('Debate'),
     )
 
-    number = models.PositiveIntegerField()
+    number = models.PositiveIntegerField(
+        verbose_name=_('Number'),
+    )
 
     created_at = models.DateTimeField(
         auto_now_add=True,
+        verbose_name=_('Created at'),
     )
 
     class Meta:
@@ -150,10 +172,15 @@ class DebateRound(models.Model):
         )
 
         ordering = ['number']
+        verbose_name = _('Debate round')
+        verbose_name_plural = _('Debate rounds')
 
     def __str__(self):
 
-        return f'{self.debate_id} - Round {self.number}'
+        return _('%(debate_id)s — round %(number)s') % {
+            'debate_id': self.debate_id,
+            'number': self.number,
+        }
 
 
 class DebateMessage(models.Model):
@@ -162,12 +189,14 @@ class DebateMessage(models.Model):
         Debate,
         on_delete=models.CASCADE,
         related_name='messages',
+        verbose_name=_('Debate'),
     )
 
     round = models.ForeignKey(
         DebateRound,
         on_delete=models.CASCADE,
         related_name='messages',
+        verbose_name=_('Round'),
     )
 
     participant = models.ForeignKey(
@@ -176,29 +205,44 @@ class DebateMessage(models.Model):
         null=True,
         blank=True,
         related_name='messages',
+        verbose_name=_('Participant'),
     )
 
     speaker_label = models.CharField(
         max_length=255,
+        verbose_name=_('Speaker label'),
     )
 
     role_name = models.CharField(
         max_length=100,
+        verbose_name=_('Role name'),
     )
 
     model_name = models.CharField(
         max_length=255,
+        verbose_name=_('Model name'),
     )
 
-    content = models.TextField()
+    content = models.TextField(
+        verbose_name=_('Content'),
+    )
 
     created_at = models.DateTimeField(
         auto_now_add=True,
+        verbose_name=_('Created at'),
     )
 
     class Meta:
 
         ordering = ['created_at']
+        verbose_name = _('Debate message')
+        verbose_name_plural = _('Debate messages')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['round', 'participant'],
+                name='unique_debate_message_per_participant_round',
+            ),
+        ]
 
     def __str__(self):
 

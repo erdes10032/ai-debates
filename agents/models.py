@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
 
 
@@ -6,12 +7,14 @@ class LLMModel(models.Model):
 
     name = models.CharField(
         max_length=100,
+        verbose_name=_('Name'),
         help_text=_('Display name in the debate UI'),
     )
 
     model_id = models.CharField(
         max_length=255,
         unique=True,
+        verbose_name=_('Model ID'),
         help_text=_(
             'OpenRouter model ID, e.g. meta-llama/llama-3.3-70b-instruct:free'
         ),
@@ -19,18 +22,22 @@ class LLMModel(models.Model):
 
     description = models.TextField(
         blank=True,
+        verbose_name=_('Description'),
     )
 
     is_active = models.BooleanField(
         default=True,
+        verbose_name=_('Is active'),
     )
 
     created_at = models.DateTimeField(
         auto_now_add=True,
+        verbose_name=_('Created at'),
     )
 
     updated_at = models.DateTimeField(
         auto_now=True,
+        verbose_name=_('Updated at'),
     )
 
     class Meta:
@@ -51,10 +58,15 @@ class DebateRole(models.Model):
     name = models.CharField(
         max_length=100,
         unique=True,
-        help_text=_('Display name, e.g. Critic'),
+        verbose_name=_('Name'),
+        help_text=_(
+            'Stable English label (e.g. Critic). '
+            'Translated in the UI via locale files.'
+        ),
     )
 
     behavior = models.TextField(
+        verbose_name=_('Behavior'),
         help_text=_(
             'Instructions for how this role argues in a debate'
         ),
@@ -62,6 +74,7 @@ class DebateRole(models.Model):
 
     is_active = models.BooleanField(
         default=True,
+        verbose_name=_('Is active'),
     )
 
     allows_concession = models.BooleanField(
@@ -75,10 +88,12 @@ class DebateRole(models.Model):
 
     created_at = models.DateTimeField(
         auto_now_add=True,
+        verbose_name=_('Created at'),
     )
 
     updated_at = models.DateTimeField(
         auto_now=True,
+        verbose_name=_('Updated at'),
     )
 
     class Meta:
@@ -91,5 +106,9 @@ class DebateRole(models.Model):
 
     def __str__(self):
 
-        return self.name
+        return self.localized_name
 
+    @property
+    def localized_name(self) -> str:
+
+        return gettext(self.name)
