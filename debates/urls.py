@@ -3,6 +3,7 @@ from django.urls import path
 from debates.views import (
     DebateCreateView,
     DebateDetailView,
+    DebateHistoryPdfDownloadView,
     DebateListView,
 )
 
@@ -26,5 +27,10 @@ urlpatterns = [
         '<int:pk>/',
         DebateDetailView.as_view(),
         name='detail',
+    ),
+    path(
+        '<int:pk>/history/pdf/',
+        DebateHistoryPdfDownloadView.as_view(),
+        name='history-pdf',
     ),
 ]
