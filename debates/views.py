@@ -1,13 +1,20 @@
 import logging
+from urllib.parse import quote
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.http import HttpResponseRedirect
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+)
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import (
     CreateView,
     DetailView,
     ListView,
+    View,
 )
 
 from debates.forms import (
@@ -18,6 +25,10 @@ from debates.forms import (
     validate_participant_formset,
 )
 from debates.models import Debate
+from debates.pdf_export import (
+    build_debate_pdf_filename,
+    render_debate_history_pdf,
+)
 from debates.services import create_debate_participants
 from debates.tasks import run_debate_task
 
@@ -218,3 +229,43 @@ class DebateDetailView(
         )
 
         return context
+
+
+class DebateHistoryPdfDownloadView(
+    LoginRequiredMixin,
+    View,
+):
+
+    def get(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        debate = get_object_or_404(
+            Debate,
+            user=request.user,
+            pk=kwargs['pk'],
+        )
+
+        if debate.status != Debate.Status.COMPLETED:
+            raise Http404(
+                'Debate history is available only after completion.'
+            )
+
+        pdf_content = render_debate_history_pdf(
+            debate=debate,
+        )
+        filename = build_debate_pdf_filename(
+            debate=debate,
+        )
+        encoded_filename = quote(filename)
+
+        response = HttpResponse(
+            pdf_content,
+            content_type='application/pdf',
+        )
+        response['Content-Disposition'] = (
+            f"attachment; filename*=UTF-8''{encoded_filename}"
+        )
+        return response
