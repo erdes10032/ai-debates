@@ -1,12 +1,15 @@
-
 import logging
 import time
+from typing import Protocol
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.conf import settings
 from django.db import transaction
 
 from agents.services.openrouter import OpenRouterClient
+from agents.services.prompts import DebatePromptBuilder
+from agents.services.response_cleaner import DebateResponseCleaner
 from debates.concession import (
     CONCESSION_MIN_ROUND,
     active_participants,
@@ -20,19 +23,43 @@ from debates.models import (
     DebateRound,
 )
 
+
 logger = logging.getLogger(__name__)
+
+
+class LLMClient(Protocol):
+
+    def generate_response(
+        self,
+        *,
+        model: str,
+        system_prompt: str,
+        messages: list[dict],
+    ) -> str:
+        ...
 
 
 class DebateEngine:
 
     MAX_CONTEXT_MESSAGES = 20
 
-    ROUND_DELAY_SECONDS = 4
+    def __init__(
+        self,
+        *,
+        client: LLMClient | None = None,
+        prompt_builder: DebatePromptBuilder | None = None,
+        response_cleaner: type[DebateResponseCleaner] = DebateResponseCleaner,
+        round_delay_seconds: float | None = None,
+    ):
 
-    def __init__(self):
-
-        self.client = OpenRouterClient()
-
+        self.client = client or OpenRouterClient()
+        self.prompt_builder = prompt_builder or DebatePromptBuilder()
+        self.response_cleaner = response_cleaner
+        self.round_delay_seconds = (
+            round_delay_seconds
+            if round_delay_seconds is not None
+            else settings.DEBATE_ROUND_DELAY_SECONDS
+        )
         self.channel_layer = get_channel_layer()
 
     def run_debate(
@@ -139,6 +166,7 @@ class DebateEngine:
                         continue
 
                     label = participant.speaker_label
+                    role_name = participant.debate_role.localized_name
 
                     logger.info(
                         'Round %s: generating for %s',
@@ -148,37 +176,53 @@ class DebateEngine:
 
                     position = positions[participant.id]
 
+                    if self._message_exists(
+                        debate_round=debate_round,
+                        participant=participant,
+                    ):
+                        logger.info(
+                            'Skipping duplicate message for '
+                            'participant %s in round %s',
+                            participant.id,
+                            round_number,
+                        )
+                        continue
+
                     response = self.client.generate_response(
                         model=participant.llm_model.model_id,
-                        system_prompt=self.build_system_prompt(
-                            debate=debate,
-                            participant=participant,
-                            position=position,
-                            round_number=round_number,
-                            total_rounds=debate.rounds_count,
+                        system_prompt=(
+                            self.prompt_builder.build_system_prompt(
+                                debate=debate,
+                                participant=participant,
+                                position=position,
+                                round_number=round_number,
+                                total_rounds=debate.rounds_count,
+                            )
                         ),
                         messages=[
                             {
                                 'role': 'user',
-                                'content': self.build_user_prompt(
-                                    debate=debate,
-                                    round_number=round_number,
-                                    position=position,
-                                    context=self.build_context(
-                                        history=history,
-                                    ),
-                                    opponent_arguments=(
-                                        self.get_recent_opponent_arguments(
+                                'content': (
+                                    self.prompt_builder.build_user_prompt(
+                                        debate=debate,
+                                        round_number=round_number,
+                                        position=position,
+                                        context=self.build_context(
                                             history=history,
-                                            current_speaker=label,
-                                        )
-                                    ),
+                                        ),
+                                        opponent_arguments=(
+                                            self.get_recent_opponent_arguments(
+                                                history=history,
+                                                current_speaker=label,
+                                            )
+                                        ),
+                                    )
                                 ),
                             },
                         ],
                     )
 
-                    cleaned_response = self.clean_response(
+                    cleaned_response = self.response_cleaner.clean(
                         response=response,
                     )
 
@@ -204,7 +248,7 @@ class DebateEngine:
                             round=debate_round,
                             participant=participant,
                             speaker_label=label,
-                            role_name=participant.debate_role.name,
+                            role_name=role_name,
                             model_name=participant.llm_model.model_id,
                             content=cleaned_response,
                         )
@@ -226,7 +270,8 @@ class DebateEngine:
 
                     round_messages += 1
 
-                    time.sleep(self.ROUND_DELAY_SECONDS)
+                    if self.round_delay_seconds > 0:
+                        time.sleep(self.round_delay_seconds)
 
                     if (
                         debate.allow_concessions
@@ -282,6 +327,18 @@ class DebateEngine:
 
             raise
 
+    @staticmethod
+    def _message_exists(
+        *,
+        debate_round: DebateRound,
+        participant: DebateParticipant,
+    ) -> bool:
+
+        return DebateMessage.objects.filter(
+            round=debate_round,
+            participant=participant,
+        ).exists()
+
     def _apply_concession(
         self,
         *,
@@ -322,7 +379,7 @@ class DebateEngine:
 
         consensus_model = participants[0].llm_model.model_id
 
-        consensus = self.build_consensus(
+        consensus = self._build_consensus(
             debate=debate,
             history=history,
             model=consensus_model,
@@ -348,6 +405,70 @@ class DebateEngine:
             'Debate %s completed (early=%s)',
             debate.id,
             ended_early,
+        )
+
+    def _build_consensus(
+        self,
+        *,
+        debate: Debate,
+        history: list[dict],
+        model: str,
+        ended_early: bool,
+    ) -> str:
+
+        context = self.build_context(
+            history=history,
+        )
+
+        early_note = ''
+
+        if ended_early and debate.allow_concessions:
+
+            conceded = list(
+                debate.participants.filter(
+                    has_conceded=True,
+                ),
+            )
+
+            if conceded:
+
+                lines = [
+                    (
+                        f'- {participant.speaker_label} '
+                        f'(round {participant.conceded_at_round})'
+                    )
+                    for participant in conceded
+                ]
+
+                early_note = (
+                    '\nThe debate ended early because one side '
+                    'conceded. Conceded participants:\n'
+                    + '\n'.join(lines)
+                    + '\n'
+                )
+
+        prompt = self.prompt_builder.build_consensus_prompt(
+            debate=debate,
+            context=context,
+            early_note=early_note,
+        )
+
+        response = self.client.generate_response(
+            model=model,
+            system_prompt=(
+                'You are a neutral debate moderator who writes '
+                'final consensus summaries.'
+            ),
+            messages=[
+                {
+                    'role': 'user',
+                    'content': prompt,
+                },
+            ],
+        )
+
+        return self.response_cleaner.clean(
+            response=response,
         )
 
     def broadcast_message(
@@ -462,123 +583,6 @@ class DebateEngine:
 
         return positions
 
-    def build_system_prompt(
-        self,
-        *,
-        debate: Debate,
-        participant: DebateParticipant,
-        position: str,
-        round_number: int,
-        total_rounds: int,
-    ) -> str:
-
-        role = participant.debate_role
-
-        position_instruction = self.get_position_instruction(
-            position=position,
-        )
-
-        rules = [
-            '- Always answer in EXACTLY the same language '
-            'as the debate topic',
-            '- Never switch language',
-            '- Never explain your reasoning process',
-            '- Never say "as an AI"',
-            '- Never describe what you plan to do',
-            '- Speak naturally like a real debater',
-            '- Directly respond to arguments from '
-            'other participants',
-            '- Attack weak arguments logically',
-            '- Give concrete examples',
-            '- Be persuasive and intelligent',
-            '- Avoid repetition',
-            '- Do NOT write stage directions',
-            '- Do NOT write analysis',
-            '- This is a debate, not an essay',
-            '- Keep responses under 300 words',
-            '- Write the full argument; do not stop mid-sentence',
-        ]
-
-        concession_block = ''
-
-        if debate.allow_concessions and participant.debate_role.allows_concession:
-
-            rules.extend(
-                [
-                    '- Defend your position while it remains defensible',
-                    '- If the core of your position has been refuted, '
-                    'you MUST concede honestly',
-                    '- To concede, state it clearly in one sentence, e.g. '
-                    '"I concede" / "I admit defeat" / "Признаю поражение"',
-                    '- Do NOT concede casually or after minor points only',
-                ],
-            )
-
-            if round_number >= CONCESSION_MIN_ROUND:
-
-                concession_block = (
-                    '\nHONESTY CHECK:\n'
-                    '- Re-evaluate whether your position still holds\n'
-                    '- Concede only if your side has genuinely lost\n'
-                )
-
-            if round_number == total_rounds:
-
-                concession_block += (
-                    '\nFINAL ROUND:\n'
-                    '- If your position is broken, concede explicitly\n'
-                )
-
-        else:
-
-            rules.extend(
-                [
-                    '- Defend your position consistently',
-                    '- Do NOT suddenly change sides',
-                    '- Do NOT concede or surrender',
-                ],
-            )
-
-        return (
-            f'You are participating in a live AI debate.\n\n'
-            f'YOUR ROLE:\n{role.name}\n\n'
-            f'ROLE BEHAVIOR:\n{role.behavior}\n\n'
-            f'YOUR POSITION:\n{position_instruction}\n\n'
-            f'{concession_block}'
-            f'CRITICAL RULES:\n'
-            + '\n'.join(rules)
-            + '\n'
-        )
-
-    def build_user_prompt(
-        self,
-        *,
-        debate: Debate,
-        round_number: int,
-        position: str,
-        context: str,
-        opponent_arguments: str,
-    ) -> str:
-
-        return (
-            f'DEBATE TOPIC:\n{debate.topic}\n\n'
-            f'ROUND NUMBER:\n{round_number}\n\n'
-            f'YOUR POSITION:\n{position}\n\n'
-            f'PREVIOUS DISCUSSION:\n{context}\n\n'
-            f'OPPONENT ARGUMENTS YOU SHOULD ADDRESS:\n'
-            f'{opponent_arguments}\n\n'
-            f'YOUR TASK:\n'
-            f'- Respond directly to opponents\n'
-            f'- Continue the debate naturally\n'
-            f'- Defend your side while it remains defensible\n'
-            f'- Refute weak arguments\n'
-            f'- Add new reasoning\n'
-            f'- Sound like a real conversation\n'
-            f'- Do NOT repeat previous messages\n'
-            f'- Do NOT summarize the whole debate\n'
-            f'- Focus on discussion and argumentation\n'
-        )
-
     def build_context(
         self,
         *,
@@ -631,161 +635,3 @@ class DebateEngine:
             return 'No direct opponent arguments found.'
 
         return '\n\n'.join(recent)
-
-    @staticmethod
-    def clean_response(
-        *,
-        response: str,
-    ) -> str:
-
-        if not response:
-
-            return (
-                'I disagree with the previous arguments and want '
-                'to continue the discussion.'
-            )
-
-        forbidden_starts = (
-            'okay',
-            'sure',
-            'the user',
-            'i need to',
-            'i should',
-            'let me',
-            'here is',
-            'analysis:',
-            'reasoning:',
-            'thoughts:',
-            'first, let me',
-            'as an ai',
-        )
-
-        lines = response.splitlines()
-
-        cleaned_lines = []
-
-        for line in lines:
-
-            stripped = line.strip()
-
-            if not stripped:
-                continue
-
-            lower = stripped.lower()
-
-            if (
-                len(cleaned_lines) < 3
-                and any(
-                    lower.startswith(phrase)
-                    for phrase in forbidden_starts
-                )
-            ):
-                continue
-
-            cleaned_lines.append(stripped)
-
-        cleaned = '\n'.join(cleaned_lines).strip()
-
-        if not cleaned:
-            cleaned = response.strip()
-
-        if len(cleaned) < 20:
-
-            return (
-                'I disagree with several points from the previous '
-                'speaker. The issue is more complicated than they '
-                'describe.'
-            )
-
-        return cleaned
-
-    def build_consensus(
-        self,
-        *,
-        debate: Debate,
-        history: list[dict],
-        model: str,
-        ended_early: bool = False,
-    ) -> str:
-
-        context = self.build_context(
-            history=history,
-        )
-
-        early_note = ''
-
-        if ended_early and debate.allow_concessions:
-
-            conceded = [
-                participant
-                for participant in debate.participants.filter(
-                    has_conceded=True,
-                )
-            ]
-
-            if conceded:
-
-                lines = [
-                    (
-                        f'- {participant.speaker_label} '
-                        f'(round {participant.conceded_at_round})'
-                    )
-                    for participant in conceded
-                ]
-
-                early_note = (
-                    '\nThe debate ended early because one side '
-                    'conceded. Conceded participants:\n'
-                    + '\n'.join(lines)
-                    + '\n'
-                )
-
-        prompt = (
-            f'DEBATE TOPIC:\n{debate.topic}\n\n'
-            f'{early_note}'
-            f'DEBATE HISTORY:\n{context}\n\n'
-            f'TASK:\n'
-            f'- Generate the FINAL CONSENSUS\n'
-            f'- Summarize strongest arguments from both sides\n'
-            f'- Explain what conclusion the participants reached\n'
-            f'- If concessions occurred, reflect them in the summary\n'
-            f'- If no full agreement exists, explain the compromise\n'
-            f'- Respond in the SAME language as the debate topic\n'
-            f'- Write naturally and clearly\n'
-            f'- You may use Markdown tables where helpful\n'
-            f'- Do NOT explain your analysis\n'
-        )
-
-        response = self.client.generate_response(
-            model=model,
-            system_prompt=(
-                'You are a neutral debate moderator who writes '
-                'final consensus summaries.'
-            ),
-            messages=[
-                {
-                    'role': 'user',
-                    'content': prompt,
-                },
-            ],
-        )
-
-        return self.clean_response(
-            response=response,
-        )
-
-    @staticmethod
-    def get_position_instruction(
-        *,
-        position: str,
-    ) -> str:
-
-        if position == 'support':
-
-            return (
-                'You SUPPORT the main idea or proposition in the topic.'
-            )
-
-        return (
-            'You OPPOSE the main idea or proposition in the topic.'
-        )
