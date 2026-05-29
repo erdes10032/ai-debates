@@ -4,13 +4,17 @@ import bleach
 import markdown as markdown_lib
 from django.utils.safestring import SafeString, mark_safe
 
+from debates.markdown_tables import (
+    ends_table_block,
+    is_table_line,
+    merge_wrapped_table_lines,
+    normalize_all_table_separators,
+    normalize_table_separator_row,
+)
+
 
 _ATX_HEADER_PATTERN = re.compile(
     r'^#{1,6}\s',
-)
-
-_LIST_ITEM_PATTERN = re.compile(
-    r'^(?:[-*+]|\d+\.)\s+',
 )
 
 ALLOWED_MARKDOWN_TAGS = [
@@ -53,197 +57,6 @@ ALLOWED_MARKDOWN_PROTOCOLS = [
 ]
 
 
-def _split_table_cells(line: str) -> list[str]:
-
-    return [
-        cell.strip()
-        for cell in line.strip().strip('|').split('|')
-    ]
-
-
-def _is_table_separator_row(line: str) -> bool:
-
-    stripped = line.strip()
-
-    if not stripped.startswith('|'):
-        return False
-
-    cells = _split_table_cells(line)
-
-    if not cells:
-        return False
-
-    return all(
-        re.fullmatch(r':?-{3,}:?', cell) is not None
-        for cell in cells
-    )
-
-
-def _is_table_data_row(line: str) -> bool:
-
-    stripped = line.strip()
-
-    if not stripped.startswith('|'):
-        return False
-
-    if _is_table_separator_row(line):
-        return False
-
-    return stripped.count('|') >= 2
-
-
-def _is_table_line(line: str) -> bool:
-
-    return (
-        _is_table_separator_row(line)
-        or _is_table_data_row(line)
-    )
-
-
-def _normalize_table_separator_row(line: str) -> str:
-
-    if not _is_table_separator_row(line):
-        return line
-
-    cell_count = len(_split_table_cells(line))
-
-    return '|' + '|'.join(['---'] * cell_count) + '|'
-
-
-def _ends_table_block(line: str) -> bool:
-
-    stripped = line.strip()
-
-    if not stripped:
-        return False
-
-    if _is_table_line(line):
-        return False
-
-    if _ATX_HEADER_PATTERN.match(stripped):
-        return True
-
-    if _LIST_ITEM_PATTERN.match(stripped):
-        return True
-
-    if stripped in {'---', '***', '___'}:
-        return True
-
-    return False
-
-
-def _normalize_all_table_separators(text: str) -> str:
-
-    lines = text.split('\n')
-
-    return '\n'.join(
-        _normalize_table_separator_row(line)
-        for line in lines
-    )
-
-
-def _merge_wrapped_table_lines(text: str) -> str:
-
-    lines = text.split('\n')
-    result: list[str] = []
-    in_table = False
-    index = 0
-
-    while index < len(lines):
-
-        line = lines[index]
-
-        if _is_table_line(line):
-
-            in_table = True
-
-            result.append(
-                _normalize_table_separator_row(line),
-            )
-
-            index += 1
-
-            continue
-
-        if not in_table:
-
-            result.append(line)
-
-            index += 1
-
-            continue
-
-        if not line.strip():
-
-            blank_start = index
-
-            while (
-                index < len(lines)
-                and not lines[index].strip()
-            ):
-                index += 1
-
-            if index >= len(lines):
-
-                in_table = False
-
-                continue
-
-            next_line = lines[index]
-
-            if _is_table_line(next_line):
-
-                continue
-
-            if _ends_table_block(next_line):
-
-                in_table = False
-
-                result.append('')
-
-                result.append(next_line)
-
-                index += 1
-
-                continue
-
-            if result:
-
-                result[-1] = (
-                    result[-1].rstrip()
-                    + ' '
-                    + next_line.strip()
-                )
-
-            index += 1
-
-            continue
-
-        if _ends_table_block(line):
-
-            in_table = False
-
-            result.append('')
-
-            result.append(line)
-
-            index += 1
-
-            continue
-
-        if result:
-
-            result[-1] = (
-                result[-1].rstrip()
-                + ' '
-                + line.strip()
-            )
-
-        index += 1
-
-    return '\n'.join(result)
-
-
 def _ensure_blank_line_before_tables(text: str) -> str:
 
     lines = text.split('\n')
@@ -252,10 +65,10 @@ def _ensure_blank_line_before_tables(text: str) -> str:
     for line in lines:
 
         if (
-            _is_table_line(line)
+            is_table_line(line)
             and result
             and result[-1].strip()
-            and not _is_table_line(result[-1])
+            and not is_table_line(result[-1])
         ):
             result.append('')
 
@@ -273,8 +86,8 @@ def _ensure_blank_line_after_tables(text: str) -> str:
 
         if (
             index > 0
-            and _is_table_line(lines[index - 1])
-            and not _is_table_line(line)
+            and is_table_line(lines[index - 1])
+            and not is_table_line(line)
             and line.strip()
             and result
             and result[-1].strip()
@@ -318,7 +131,7 @@ def _normalize_horizontal_rules(text: str) -> str:
             stripped in {'---', '***', '___'}
             and result
             and result[-1].strip()
-            and not _is_table_line(result[-1])
+            and not is_table_line(result[-1])
         ):
             result.append('')
             result.append(stripped)
@@ -341,9 +154,9 @@ def prepare_debate_markdown(text: str) -> str:
         .strip()
     )
 
-    normalized = _normalize_all_table_separators(normalized)
+    normalized = normalize_all_table_separators(normalized)
 
-    normalized = _merge_wrapped_table_lines(normalized)
+    normalized = merge_wrapped_table_lines(normalized)
 
     normalized = _ensure_blank_line_before_tables(normalized)
 
