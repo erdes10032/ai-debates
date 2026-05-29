@@ -58,12 +58,6 @@ class DebateCreateForm(forms.ModelForm):
             'allow_concessions': forms.CheckboxInput(),
         }
 
-        labels = {
-            'allow_concessions': _(
-                'Allow participants to concede',
-            ),
-        }
-
     def clean_topic(self):
 
         topic = self.cleaned_data['topic'].strip()

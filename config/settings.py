@@ -6,10 +6,16 @@ from dotenv import load_dotenv
 from django.utils.translation import gettext_lazy as _
 
 
-if 'pytest' in sys.modules:
+_TESTING = 'pytest' in sys.modules
+
+if _TESTING:
     os.environ.setdefault(
         'SECRET_KEY',
-        'django-insecure-test-key'
+        'django-insecure-test-key',
+    )
+    os.environ.setdefault(
+        'OPENROUTER_API_KEY',
+        'test-openrouter-key',
     )
 
 load_dotenv()
@@ -300,10 +306,14 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 
-if not OPENROUTER_API_KEY:
+if not OPENROUTER_API_KEY and not _TESTING:
     raise ValueError(
         'OPENROUTER_API_KEY is missing in .env',
     )
+
+DEBATE_ROUND_DELAY_SECONDS = float(
+    os.getenv('DEBATE_ROUND_DELAY_SECONDS', '4'),
+)
 
 # CELERY
 
@@ -352,9 +362,6 @@ def _redis_points_to_localhost(url: str) -> bool:
     )
 
 
-# Celery worker and WebSocket must share one Redis. A common mistake is
-# REDIS_URL=127.0.0.1:6379 without a local Redis daemon while Celery uses
-# a remote broker — live updates then fail with connection refused.
 _redis_url_env = os.getenv('REDIS_URL', '').strip()
 
 if (
