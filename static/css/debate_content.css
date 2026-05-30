@@ -1,0 +1,126 @@
+/* Markdown in debate messages and consensus. */
+
+.markdown-content {
+    line-height: 1.6;
+    word-wrap: break-word;
+}
+
+/* Tables: always dark background + light text (including inside .box). */
+.markdown-content table {
+    width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+    background-color: #1e2530;
+}
+
+.markdown-content thead th {
+    background-color: #141a22;
+    color: #f5f7fa;
+    font-weight: 700;
+    border: 1px solid #3d4a5c;
+    padding: 0.65em 0.8em;
+    vertical-align: top;
+    text-align: left;
+}
+
+.markdown-content tbody td {
+    background-color: #1e2530;
+    color: #f5f7fa;
+    border: 1px solid #3d4a5c;
+    padding: 0.65em 0.8em;
+    vertical-align: top;
+    text-align: left;
+}
+
+.markdown-content table th *,
+.markdown-content table td *,
+.markdown-content table th p,
+.markdown-content table td p,
+.markdown-content table th strong,
+.markdown-content table td strong,
+.markdown-content table th em,
+.markdown-content table td em,
+.markdown-content table th li,
+.markdown-content table td li {
+    color: inherit;
+}
+
+.markdown-content table a {
+    color: #9ec5fe;
+    text-decoration: underline;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.markdown-content h1 {
+    font-size: 1.5rem;
+}
+
+.markdown-content h2 {
+    font-size: 1.35rem;
+}
+
+.markdown-content h3 {
+    font-size: 1.2rem;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.markdown-content p {
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content strong {
+    font-weight: 700;
+}
+
+.markdown-content hr {
+    margin: 1.5rem 0;
+    border: none;
+    border-top: 1px solid #5a5a5a;
+    background: none;
+    height: 0;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid #dbdbdb;
+    padding-left: 1rem;
+    color: #4a4a4a;
+    margin: 1rem 0;
+}
+
+.markdown-content code {
+    background-color: rgba(0, 0, 0, 0.08);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background-color: #141a22;
+    color: #f5f7fa;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.markdown-content pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+}
+
+.tag-conceded {
+    vertical-align: middle;
+}
