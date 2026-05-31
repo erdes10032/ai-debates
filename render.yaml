@@ -12,10 +12,6 @@ services:
     dockerfilePath: ./Dockerfile
     dockerCommand: ./scripts/start-web.sh
     healthCheckPath: /
-    disk:
-      name: media
-      mountPath: /app/media
-      sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
