@@ -38,8 +38,18 @@
 </div>
 
 {% if debate.status == 'completed' %}
-    <div class="mb-5">
+    <div id="pdf-download-block" class="mb-5">
         <a
+            href="{% url 'debates:history-pdf' debate.id %}"
+            class="button is-link is-light"
+        >
+            {% trans "Download history as PDF" %}
+        </a>
+    </div>
+{% else %}
+    <div id="pdf-download-block" class="mb-5" style="display:none;">
+        <a
+            id="pdf-download-link"
             href="{% url 'debates:history-pdf' debate.id %}"
             class="button is-link is-light"
         >
@@ -122,13 +132,15 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
+<script src="{% static 'js/vendor/purify.min.js' %}"></script>
+<script src="{% static 'js/vendor/marked.min.js' %}"></script>
 <script src="{% static 'js/debate_markdown.js' %}"></script>
 
 <script>
 
 const debateId = '{{ debate.id }}';
+
+const consensusHtmlUrl = '{% url "debates:consensus-html" debate.id %}';
 
 const concededLabel = '{% trans "Conceded" %}';
 
@@ -266,25 +278,59 @@ function addMessage(data) {
     );
 }
 
+async function loadConsensusHtml(fallbackMarkdown) {
+
+    const contentEl = document.getElementById(
+        'consensus-content'
+    );
+
+    try {
+        const response = await fetch(
+            consensusHtmlUrl,
+            { credentials: 'same-origin' },
+        );
+
+        if (response.ok) {
+            contentEl.innerHTML = await response.text();
+            return;
+        }
+    } catch (error) {
+        console.warn(
+            'Consensus HTML fetch failed',
+            error,
+        );
+    }
+
+    if (fallbackMarkdown) {
+        contentEl.innerHTML = renderDebateMarkdown(
+            fallbackMarkdown,
+        );
+    }
+}
+
 function updateStatus(data) {
 
     document.getElementById(
         'debate-status'
     ).innerText = data.status;
 
+    if (data.status === 'completed') {
+        const pdfBlock = document.getElementById(
+            'pdf-download-block'
+        );
+
+        if (pdfBlock) {
+            pdfBlock.style.display = 'block';
+        }
+    }
+
     if (data.consensus) {
 
-        const block = document.getElementById(
-            'consensus-block'
-        );
-
-        block.style.display = 'block';
-
         document.getElementById(
-            'consensus-content'
-        ).innerHTML = renderDebateMarkdown(
-            data.consensus
-        );
+            'consensus-block'
+        ).style.display = 'block';
+
+        loadConsensusHtml(data.consensus);
     }
 }
 

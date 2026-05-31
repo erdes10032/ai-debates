@@ -6,6 +6,7 @@ from django.db.models import QuerySet
 from django.utils.text import get_valid_filename
 from django.utils.translation import gettext as _
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 
 from debates.markdown_tables import (
     collect_markdown_table,
@@ -45,23 +46,34 @@ def render_debate_history_pdf(*, debate: Debate) -> bytes:
     pdf.add_page()
 
     font_path = _resolve_unicode_font_path()
-    # Keep compatibility with both fpdf2 and legacy pyfpdf:
-    # legacy pyfpdf requires uni=True for TTF unicode fonts,
-    # otherwise it tries to load a pickled font definition.
-    pdf.add_font('main', style='', fname=str(font_path), uni=True)
+    pdf.add_font('main', style='', fname=str(font_path))
     pdf.set_font('main', size=14)
 
-    pdf.multi_cell(0, 8, txt=_pdf_text(_('Debate history')))
+    content_width = pdf.epw
+
+    pdf.multi_cell(
+        content_width,
+        8,
+        text=_pdf_text(_('Debate history')),
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
     pdf.set_font('main', size=12)
     pdf.multi_cell(
-        0,
+        content_width,
         7,
-        txt=_pdf_text(f"{_('Topic')}: {debate.topic}"),
+        text=_pdf_text(f"{_('Topic')}: {debate.topic}"),
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
     )
     pdf.multi_cell(
-        0,
+        content_width,
         7,
-        txt=_pdf_text(f"{_('Status')}: {debate.get_status_display()}"),
+        text=_pdf_text(
+            f"{_('Status')}: {debate.get_status_display()}",
+        ),
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
     )
     pdf.ln(2)
 
@@ -75,22 +87,28 @@ def render_debate_history_pdf(*, debate: Debate) -> bytes:
             pdf.set_font('main', size=12)
             pdf.ln(2)
             pdf.multi_cell(
-                0,
+                content_width,
                 8,
-                txt=_pdf_text(f"{_('Round')} {current_round}"),
+                text=_pdf_text(f"{_('Round')} {current_round}"),
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
             )
         pdf.set_font('main', size=11)
         pdf.multi_cell(
-            0,
+            content_width,
             6,
-            txt=_pdf_text(
+            text=_pdf_text(
                 f"{message.speaker_label} ({message.role_name})"
             ),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
         )
         pdf.multi_cell(
-            0,
+            content_width,
             6,
-            txt=_pdf_text(message.content),
+            text=_pdf_text(message.content),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
         )
         pdf.ln(1)
 
@@ -111,10 +129,12 @@ def render_debate_history_pdf(*, debate: Debate) -> bytes:
 
 
 def _resolve_unicode_font_path() -> Path:
+    module_dir = Path(__file__).resolve().parent
     candidates = (
+        module_dir / 'fonts' / 'DejaVuSans.ttf',
+        Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
         Path('C:/Windows/Fonts/arial.ttf'),
         Path('C:/Windows/Fonts/segoeui.ttf'),
-        Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
         Path('/Library/Fonts/Arial Unicode.ttf'),
         Path('/Library/Fonts/Arial.ttf'),
     )
@@ -155,7 +175,13 @@ def _write_markdown_to_pdf(
     markdown_text: str,
 ) -> None:
     pdf.set_font('main', size=12)
-    pdf.multi_cell(0, 8, txt=_pdf_text(title))
+    pdf.multi_cell(
+        pdf.epw,
+        8,
+        text=_pdf_text(title),
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
     pdf.ln(1)
 
     lines = prepare_debate_markdown(markdown_text or '').splitlines()
@@ -168,7 +194,13 @@ def _write_markdown_to_pdf(
             return
         plain = _strip_inline_markdown('\n'.join(paragraph).strip())
         pdf.set_font('main', size=11)
-        pdf.multi_cell(0, 6, txt=_pdf_text(plain))
+        pdf.multi_cell(
+            pdf.epw,
+            6,
+            text=_pdf_text(plain),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
         pdf.ln(1)
         paragraph = []
 
@@ -182,7 +214,13 @@ def _write_markdown_to_pdf(
             heading = _strip_inline_markdown(stripped.lstrip('#').strip())
             size = 14 if hashes == 1 else 13 if hashes == 2 else 12
             pdf.set_font('main', size=size)
-            pdf.multi_cell(0, 7, txt=_pdf_text(heading))
+            pdf.multi_cell(
+                pdf.epw,
+                7,
+                text=_pdf_text(heading),
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
             pdf.ln(1)
             i += 1
             continue
@@ -203,6 +241,33 @@ def _write_markdown_to_pdf(
         i += 1
 
     flush_paragraph()
+
+
+def _wrap_long_word(
+    pdf: FPDF,
+    word: str,
+    max_width: float,
+) -> list[str]:
+    chunks: list[str] = []
+    current = ''
+
+    for char in word:
+        candidate = f'{current}{char}'
+
+        if (
+            current
+            and pdf.get_string_width(candidate) > max_width
+        ):
+            chunks.append(current)
+            current = char
+            continue
+
+        current = candidate
+
+    if current:
+        chunks.append(current)
+
+    return chunks or ['']
 
 
 def _strip_inline_markdown(value: str) -> str:
@@ -233,41 +298,89 @@ def _draw_markdown_table(pdf: FPDF, table_lines: list[str]) -> None:
             row = row[:col_count]
         normalized_rows.append(row + [''] * (col_count - len(row)))
 
-    left_margin = getattr(pdf, 'l_margin', 10)
-    right_margin = getattr(pdf, 'r_margin', 10)
-    page_width = getattr(pdf, 'w', 210)
-    usable_width = page_width - left_margin - right_margin
+    usable_width = pdf.epw
     col_w = usable_width / col_count
     line_h = 5.4
     pad_x = 1.2
     pad_y = 1.2
+    min_cell_width = 8.0
 
     def wrap_text(text: str, max_width: float) -> list[str]:
-        words = _pdf_text(text).split()
+        safe_width = max(max_width, min_cell_width)
+        normalized = _pdf_text(text)
+
+        if not normalized.strip():
+            return ['']
+
+        if pdf.get_string_width(normalized) <= safe_width:
+            return [normalized]
+
+        words = normalized.split()
         if not words:
             return ['']
+
         result: list[str] = []
         current = words[0]
+
+        if pdf.get_string_width(current) > safe_width:
+            result.extend(
+                _wrap_long_word(
+                    pdf,
+                    current,
+                    safe_width,
+                ),
+            )
+            current = ''
+
         for word in words[1:]:
-            candidate = f'{current} {word}'
-            if pdf.get_string_width(candidate) <= max_width:
+            if pdf.get_string_width(word) > safe_width:
+                if current:
+                    result.append(current)
+                    current = ''
+
+                result.extend(
+                    _wrap_long_word(
+                        pdf,
+                        word,
+                        safe_width,
+                    ),
+                )
+                continue
+
+            candidate = f'{current} {word}'.strip()
+
+            if (
+                not current
+                or pdf.get_string_width(candidate) <= safe_width
+            ):
                 current = candidate
             else:
                 result.append(current)
                 current = word
-        result.append(current)
-        return result
+
+        if current:
+            result.append(current)
+
+        return result or ['']
 
     def draw_row(cells: list[str]) -> None:
+        cell_inner_width = max(
+            col_w - (2 * pad_x),
+            min_cell_width,
+        )
         wrapped_cells = [
-            wrap_text(cell, col_w - (2 * pad_x))
+            wrap_text(cell, cell_inner_width)
             for cell in cells
         ]
-        row_h = max(len(lines_) for lines_ in wrapped_cells) * line_h + (2 * pad_y)
-        if pdf.get_y() + row_h > getattr(pdf, 'page_break_trigger', 1e9):
+        row_h = (
+            max(len(lines_) for lines_ in wrapped_cells) * line_h
+            + (2 * pad_y)
+        )
+        if pdf.get_y() + row_h > pdf.page_break_trigger:
             pdf.add_page()
+            pdf.set_font('main', size=11)
 
-        x0 = left_margin
+        x0 = pdf.l_margin
         y0 = pdf.get_y()
         for idx, lines_ in enumerate(wrapped_cells):
             x = x0 + (idx * col_w)
@@ -275,7 +388,11 @@ def _draw_markdown_table(pdf: FPDF, table_lines: list[str]) -> None:
             y = y0 + pad_y
             for line_ in lines_:
                 pdf.set_xy(x + pad_x, y)
-                pdf.cell(col_w - (2 * pad_x), line_h, txt=line_)
+                pdf.cell(
+                    cell_inner_width,
+                    line_h,
+                    text=line_,
+                )
                 y += line_h
         pdf.set_xy(x0, y0 + row_h)
 

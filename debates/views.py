@@ -24,6 +24,7 @@ from debates.forms import (
     build_participant_formset,
     validate_participant_formset,
 )
+from debates.markdown_utils import render_debate_markdown_html
 from debates.models import Debate
 from debates.pdf_export import (
     build_debate_pdf_filename,
@@ -229,6 +230,32 @@ class DebateDetailView(
         )
 
         return context
+
+
+class DebateConsensusHtmlView(
+    LoginRequiredMixin,
+    View,
+):
+
+    def get(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+
+        debate = get_object_or_404(
+            Debate,
+            user=request.user,
+            pk=kwargs['pk'],
+        )
+
+        return HttpResponse(
+            render_debate_markdown_html(
+                debate.consensus or '',
+            ),
+            content_type='text/html; charset=utf-8',
+        )
 
 
 class DebateHistoryPdfDownloadView(

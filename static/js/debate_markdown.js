@@ -115,6 +115,19 @@
             .join('\n');
     }
 
+    function splitInlineTableRows(text) {
+        return text
+            .split('\n')
+            .map((line) => {
+                if ((line.match(/\|/g) || []).length < 4) {
+                    return line;
+                }
+
+                return line.replace(/\|\s*\|/g, '|\n|');
+            })
+            .join('\n');
+    }
+
     function mergeWrappedTableLines(text) {
         const lines = text.split('\n');
         const result = [];
@@ -295,6 +308,7 @@
             .trim();
 
         normalized = normalizeAllTableSeparators(normalized);
+        normalized = splitInlineTableRows(normalized);
         normalized = mergeWrappedTableLines(normalized);
         normalized = ensureBlankLineBeforeTables(normalized);
         normalized = ensureBlankLineAfterTables(normalized);
@@ -304,14 +318,53 @@
         return normalized;
     }
 
+    const MARKDOWN_PURIFY_CONFIG = {
+        USE_PROFILES: { html: true },
+        ADD_TAGS: [
+            'table',
+            'thead',
+            'tbody',
+            'tr',
+            'th',
+            'td',
+        ],
+        ADD_ATTR: ['align'],
+    };
+
+    let markedConfigured = false;
+
+    function ensureMarkedConfigured() {
+        if (markedConfigured) {
+            return true;
+        }
+
+        if (
+            typeof global.marked === 'undefined'
+            || typeof global.marked.parse !== 'function'
+        ) {
+            return false;
+        }
+
+        if (typeof global.marked.use === 'function') {
+            global.marked.use({
+                gfm: true,
+                breaks: false,
+            });
+        }
+
+        markedConfigured = true;
+        return true;
+    }
+
     function sanitizeRenderedHtml(html, plainFallback) {
         if (
             typeof global.DOMPurify !== 'undefined'
             && typeof global.DOMPurify.sanitize === 'function'
         ) {
-            return global.DOMPurify.sanitize(html, {
-                USE_PROFILES: { html: true },
-            });
+            return global.DOMPurify.sanitize(
+                html,
+                MARKDOWN_PURIFY_CONFIG,
+            );
         }
 
         return fallbackFormat(plainFallback);
@@ -324,15 +377,8 @@
 
         const prepared = prepareDebateMarkdown(text);
 
-        if (
-            typeof global.marked !== 'undefined'
-            && typeof global.marked.parse === 'function'
-        ) {
-            const rawHtml = global.marked.parse(prepared, {
-                gfm: true,
-                breaks: false,
-                tables: true,
-            });
+        if (ensureMarkedConfigured()) {
+            const rawHtml = global.marked.parse(prepared);
 
             return sanitizeRenderedHtml(rawHtml, prepared);
         }

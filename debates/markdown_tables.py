@@ -105,6 +105,27 @@ def normalize_all_table_separators(text: str) -> str:
     )
 
 
+def split_inline_table_rows(text: str) -> str:
+    """
+    LLMs often emit several Markdown table rows on one physical line:
+    ``| A | B | |---|---| | C | D |``. Insert row breaks before parsing.
+    """
+
+    lines_out: list[str] = []
+
+    for line in text.split('\n'):
+        if line.count('|') >= 4:
+            line = re.sub(
+                r'\|\s*\|',
+                '|\n|',
+                line,
+            )
+
+        lines_out.append(line)
+
+    return '\n'.join(lines_out)
+
+
 def merge_wrapped_table_lines(text: str) -> str:
 
     lines = text.split('\n')

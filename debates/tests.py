@@ -14,7 +14,10 @@ from debates.forms import (
     participant_indices_in_post,
 )
 from debates.models import Debate
-from debates.pdf_export import build_debate_pdf_filename
+from debates.pdf_export import (
+    build_debate_pdf_filename,
+    render_debate_history_pdf,
+)
 from debates.markdown_utils import (
     prepare_debate_markdown,
     render_debate_markdown_html,
@@ -210,6 +213,21 @@ class MarkdownRenderTests(TestCase):
         self.assertIn('<h3>Section two</h3>', html)
         self.assertNotIn('###', html)
 
+    def test_inline_table_rows_are_split(self):
+
+        source = (
+            '| a | b | |---|---| | 1 | 2 |'
+        )
+
+        prepared = prepare_debate_markdown(source)
+
+        self.assertIn('|---|', prepared)
+        self.assertIn('\n', prepared)
+        html = render_debate_markdown_html(source)
+
+        self.assertIn('<table>', html)
+        self.assertIn('<td>1</td>', html)
+
 
 class DebateHistoryPdfTests(TestCase):
 
@@ -284,4 +302,43 @@ class DebateHistoryPdfTests(TestCase):
         self.assertIn(
             '_2.pdf',
             filename,
+        )
+
+    def test_pdf_with_consensus_table(self):
+        debate = Debate.objects.create(
+            user=self.user,
+            topic='Тема дебатов',
+            status=Debate.Status.COMPLETED,
+            consensus=(
+                '| a | b |\n'
+                '|---|---|\n'
+                '| 1 | 2 |'
+            ),
+        )
+
+        pdf_bytes = render_debate_history_pdf(
+            debate=debate,
+        )
+
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
+    def test_consensus_html_endpoint(self):
+        debate = Debate.objects.create(
+            user=self.user,
+            topic='Topic',
+            status=Debate.Status.COMPLETED,
+            consensus='**Итог**',
+        )
+
+        response = self.client.get(
+            reverse(
+                'debates:consensus-html',
+                kwargs={'pk': debate.pk},
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b'<strong>',
+            response.content,
         )

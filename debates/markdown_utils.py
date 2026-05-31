@@ -10,6 +10,7 @@ from debates.markdown_tables import (
     merge_wrapped_table_lines,
     normalize_all_table_separators,
     normalize_table_separator_row,
+    split_inline_table_rows,
 )
 
 
@@ -155,6 +156,8 @@ def prepare_debate_markdown(text: str) -> str:
     )
 
     normalized = normalize_all_table_separators(normalized)
+
+    normalized = split_inline_table_rows(normalized)
 
     normalized = merge_wrapped_table_lines(normalized)
 

@@ -1,6 +1,7 @@
 from django.urls import path
 
 from debates.views import (
+    DebateConsensusHtmlView,
     DebateCreateView,
     DebateDetailView,
     DebateHistoryPdfDownloadView,
@@ -27,6 +28,11 @@ urlpatterns = [
         '<int:pk>/',
         DebateDetailView.as_view(),
         name='detail',
+    ),
+    path(
+        '<int:pk>/consensus/html/',
+        DebateConsensusHtmlView.as_view(),
+        name='consensus-html',
     ),
     path(
         '<int:pk>/history/pdf/',
