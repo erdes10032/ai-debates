@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import sys
 
+import dj_database_url
 from dotenv import load_dotenv
 from django.utils.translation import gettext_lazy as _
 
@@ -38,6 +39,25 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+RENDER_EXTERNAL_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME')
+
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        'CSRF_TRUSTED_ORIGINS',
+        '',
+    ).split(',')
+    if origin.strip()
+]
+
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(
+        f'https://{RENDER_EXTERNAL_HOSTNAME}',
+    )
+
 
 INSTALLED_APPS = [
     'daphne',
@@ -67,6 +87,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -111,21 +132,32 @@ if DEBUG:
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+DATABASE_URL = os.getenv('DATABASE_URL')
 
-        'NAME': os.getenv('DB_NAME'),
-
-        'USER': os.getenv('DB_USER'),
-
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-
-        'HOST': os.getenv('DB_HOST'),
-
-        'PORT': os.getenv('DB_PORT'),
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=not DEBUG,
+        ),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+
+            'NAME': os.getenv('DB_NAME'),
+
+            'USER': os.getenv('DB_USER'),
+
+            'PASSWORD': os.getenv('DB_PASSWORD'),
+
+            'HOST': os.getenv('DB_HOST'),
+
+            'PORT': os.getenv('DB_PORT'),
+        }
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -173,6 +205,19 @@ STATICFILES_DIRS = [
 ]
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'default': {
+        'BACKEND': (
+            'django.core.files.storage.FileSystemStorage'
+        ),
+    },
+    'staticfiles': {
+        'BACKEND': (
+            'whitenoise.storage.CompressedStaticFilesStorage'
+        ),
+    },
+}
 
 
 MEDIA_URL = '/media/'
@@ -395,7 +440,10 @@ LOGGING = {
 
     'formatters': {
         'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            'format': (
+                '%(asctime)s [%(levelname)s] '
+                '%(name)s: %(message)s'
+            ),
         },
     },
 
@@ -404,24 +452,21 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'standard',
         },
-
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'django.log',
-            'formatter': 'standard',
-        },
     },
 
     'loggers': {
         'django': {
-            'handlers': [
-                'console',
-                'file',
-            ],
-
+            'handlers': ['console'],
             'level': 'INFO',
-
             'propagate': True,
         },
     },
 }
+
+if DEBUG:
+    LOGGING['handlers']['file'] = {
+        'class': 'logging.FileHandler',
+        'filename': BASE_DIR / 'django.log',
+        'formatter': 'standard',
+    }
+    LOGGING['loggers']['django']['handlers'].append('file')
