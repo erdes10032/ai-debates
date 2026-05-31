@@ -167,14 +167,6 @@ http://localhost:8000/admin/
 
 ---
 
-## Деплой
-
-Приложение загружено на Render и доступно по адресу:
-
-```
-https://ai-debates-web.onrender.com
-```
-
 ## База данных
 
 ### Debate
