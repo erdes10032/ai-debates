@@ -1,0 +1,17 @@
+bleach==6.3.0
+celery==5.6.3
+channels==4.3.2
+channels_redis==4.3.0
+daphne==4.2.1
+Django==6.0.5
+django-allauth==65.16.1
+django_celery_results==2.6.0
+dj-database-url==2.3.0
+fpdf2
+httpx==0.28.1
+Markdown==3.10.2
+pillow==12.2.0
+psycopg2-binary==2.9.12
+python-dotenv==1.2.2
+redis==7.4.0
+whitenoise==6.9.0
