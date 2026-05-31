@@ -1,0 +1,13 @@
+{% load i18n %}
+
+{% blocktrans %}
+Hello from AI Debates!
+
+Please confirm your email address by clicking the link below:
+{% endblocktrans %}
+
+{{ activate_url }}
+
+{% blocktrans %}
+Thank you for using AI Debates.
+{% endblocktrans %}
