@@ -17,7 +17,6 @@
 - OpenRouter API
 - django-allauth
 - Docker / Docker Compose
-- Render
 - Pytest
 
 ---
