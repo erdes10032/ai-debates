@@ -41,7 +41,12 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
       PORT: "8000"
-    command: ./scripts/start-web.sh
+    command:
+      [
+        "sh",
+        "-c",
+        "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py setup_render_site && exec daphne -b 0.0.0.0 -p $${PORT:-8000} config.asgi:application",
+      ]
 
   celery:
     build: .
@@ -61,7 +66,12 @@ services:
       DB_PORT: "5432"
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
-    command: ./scripts/start-celery.sh
+    command:
+      [
+        "sh",
+        "-c",
+        "exec celery -A config worker -l info --concurrency=$${CELERY_WORKER_CONCURRENCY:-4}",
+      ]
 
 volumes:
   postgres_data:

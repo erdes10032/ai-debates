@@ -17,6 +17,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN chmod +x scripts/start-web.sh scripts/start-celery.sh
-
-CMD ["./scripts/start-web.sh"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py setup_render_site && exec daphne -b 0.0.0.0 -p $${PORT:-8000} config.asgi:application"]
