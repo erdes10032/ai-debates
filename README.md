@@ -104,6 +104,8 @@ User (browser)
 
 ## Установка (Docker)
 
+Нужны **Docker Desktop** (или Docker Engine + Compose) и свободные порты `8000`, `5432`, `6379`.
+
 **1. Клонировать репозиторий**
 
 ```bash
@@ -124,10 +126,18 @@ cd ai-debates
 **3. Запустить проект**
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Будут запущены контейнеры:
+Флаг `-d` запускает контейнеры в фоне, чтобы следующие команды можно было вводить в том же терминале.
+
+Дождитесь, пока все четыре сервиса будут в статусе `Up`:
+
+```bash
+docker compose ps
+```
+
+Ожидаются контейнеры:
 
 ```
 web
@@ -136,14 +146,24 @@ db
 redis
 ```
 
+`db` должен быть `healthy`. Если `web` или `celery` в статусе `Created`, а `redis` не `Up` — поднимите стек ещё раз: `docker compose up -d`.
+
 При старте `web` автоматически выполняет миграции, собирает статику и запускает **Daphne** (ASGI + WebSocket).
+
+Логи при необходимости:
+
+```bash
+docker compose logs -f web
+```
 
 ---
 
 **4. Создать суперпользователя**
 
+Контейнер `web` должен быть `Up`. Команда интерактивная — нужен флаг `-it`. Логин в админке — **email**, также спросят `username` и пароль:
+
 ```bash
-docker compose exec web python manage.py createsuperuser
+docker compose exec -it web python manage.py createsuperuser
 ```
 
 ---
@@ -158,6 +178,12 @@ http://localhost:8000
 
 ```
 http://localhost:8000/admin/
+```
+
+Остановка:
+
+```bash
+docker compose down
 ```
 
 ---
