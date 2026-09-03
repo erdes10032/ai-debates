@@ -140,7 +140,7 @@ redis
 
 ---
 
-**3. Создать суперпользователя**
+**4. Создать суперпользователя**
 
 ```bash
 docker compose exec web python manage.py createsuperuser
@@ -148,7 +148,7 @@ docker compose exec web python manage.py createsuperuser
 
 ---
 
-**4. Приложение будет доступно по адресу**
+**5. Приложение будет доступно по адресу**
 
 ```
 http://localhost:8000
