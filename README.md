@@ -113,13 +113,9 @@ cd ai-debates
 
 ---
 
-**2. Создать файл `.env`**
+**2. Заполнить файл `.env`**
 
-Скопируйте `.env.example` и заполните своими данными:
-
-```bash
-cp .env.example .env
-```
+Заполните файл `.env` своими данными
 
 Для Docker `DB_HOST`, `CELERY_BROKER_URL` и `REDIS_URL` переопределяются в `docker-compose.yml`.
 
